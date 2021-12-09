@@ -4,6 +4,8 @@ services:
     init: true
 
   shell:
+    entrypoint:
+      - /bin/sh
     image: ghcr.io/informatica-na-presales-ops/qualys-api
     init: true
     volumes:
