@@ -1,3 +1,4 @@
 services:
   qualys-api:
     image: ghcr.io/informatica-na-presales-ops/qualys-api
+    init: true
