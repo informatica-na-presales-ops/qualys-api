@@ -15,3 +15,5 @@ ENV PATH="/home/python/venv/bin:${PATH}" \
 
 LABEL org.opencontainers.image.authors="William Jackson <wjackson@informatica.com>" \
       org.opencontainers.image.source="https://github.com/informatica-na-presales-ops/qualys-api"
+
+COPY --chown=python:python get-cloud-resource-ids.py /home/python/qualys-api/get-cloud-resource-ids.py
