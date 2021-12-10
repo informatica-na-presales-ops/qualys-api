@@ -1,4 +1,15 @@
 services:
+  pip-compile:
+    entrypoint:
+      - /bin/sh
+      - -c
+      - pip install pip-tools && pip-compile
+    image: ghcr.io/informatica-na-presales-ops/qualys-api
+    init: true
+    volumes:
+      - ./:/home/python/qualys-api
+    working_dir: /home/python/qualys-api
+
   qualys-api:
     image: ghcr.io/informatica-na-presales-ops/qualys-api
     init: true
