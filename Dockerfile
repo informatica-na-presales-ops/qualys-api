@@ -14,4 +14,4 @@ ENV PATH="/home/python/venv/bin:${PATH}" \
     TZ="Etc/UTC"
 
 LABEL org.opencontainers.image.authors="William Jackson <wjackson@informatica.com>" \
-      org.opencontainers.iamge.source="https://github.com/informatica-na-presales-ops/qualys-api"
+      org.opencontainers.image.source="https://github.com/informatica-na-presales-ops/qualys-api"
