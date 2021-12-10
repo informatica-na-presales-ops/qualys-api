@@ -1,5 +1,6 @@
 --extra-index-url https://alpine-wheels.github.io/index
 
+apscheduler
 notch
 psycopg2
 qualysapi

@@ -6,6 +6,8 @@
 #
 --extra-index-url https://alpine-wheels.github.io/index
 
+apscheduler==3.8.1
+    # via -r requirements.in
 certifi==2021.10.8
     # via requests
 charset-normalizer==2.0.9
@@ -18,9 +20,22 @@ notch==0.0.1
     # via -r requirements.in
 psycopg2==2.9.2
     # via -r requirements.in
+pytz==2021.3
+    # via apscheduler
+pytz-deprecation-shim==0.1.0.post0
+    # via tzlocal
 qualysapi==8.0.1
     # via -r requirements.in
 requests==2.26.0
     # via qualysapi
+six==1.16.0
+    # via apscheduler
+tzdata==2021.5
+    # via pytz-deprecation-shim
+tzlocal==4.1
+    # via apscheduler
 urllib3==1.26.7
     # via requests
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools
