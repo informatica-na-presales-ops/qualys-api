@@ -10,31 +10,31 @@ apscheduler==3.9.1
     # via -r requirements.in
 certifi==2021.10.8
     # via requests
-charset-normalizer==2.0.9
+charset-normalizer==2.0.12
     # via requests
 idna==3.3
     # via requests
-lxml==4.6.4
+lxml==4.8.0
     # via qualysapi
 notch==2022.1
     # via -r requirements.in
 psycopg2==2.9.3
     # via -r requirements.in
-pytz==2021.3
+pytz==2022.1
     # via apscheduler
 pytz-deprecation-shim==0.1.0.post0
     # via tzlocal
 qualysapi==8.0.1
     # via -r requirements.in
-requests==2.26.0
+requests==2.27.1
     # via qualysapi
 six==1.16.0
     # via apscheduler
-tzdata==2021.5
+tzdata==2022.1
     # via pytz-deprecation-shim
-tzlocal==4.1
+tzlocal==4.2
     # via apscheduler
-urllib3==1.26.7
+urllib3==1.26.9
     # via requests
 
 # The following packages are considered to be unsafe in a requirements file:
