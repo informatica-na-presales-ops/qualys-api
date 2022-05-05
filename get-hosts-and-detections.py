@@ -62,8 +62,8 @@ def main_job(repeat_interval_hours: int = None):
 
     url = f'https://{qualys_hostname}/api/2.0/fo/asset/host/vm/detection/'
 
-    tag_set_include = os.getenv('QUALYS_TAG_SET_INCLUDE')
-    severity = os.getenv('QUALYS_DETECTION_SEVERITY')
+    tag_set_include = int(os.getenv('QUALYS_TAG_SET_INCLUDE'))
+    severity = int(os.getenv('QUALYS_DETECTION_SEVERITY', 5))
     params = {
         'action': 'list',
         'filter_superseded_qids': 1,
