@@ -32,10 +32,8 @@ def upsert_qualys_hosts(cnx, records: list):
 
 
 def upsert_qualys_host_detections(cnx, records: list):
-    host_ids = tuple(set([r.get('host_id') for r in records]))
     with cnx:
         with cnx.cursor() as cur:
-            cur.execute('delete from qualys_host_detections where host_id in %(host_ids)s', {'host_ids': host_ids})
             sql = '''
                 insert into qualys_host_detections (
                     cloud_resource_id, host_id, last_found_at, qid, results, severity,
@@ -43,7 +41,9 @@ def upsert_qualys_host_detections(cnx, records: list):
                 ) values (
                     %(cloud_resource_id)s, %(host_id)s, %(last_found_at)s, %(qid)s, %(results)s, %(severity)s,
                     %(status)s, true, %(type)s
-                )
+                ) on conflict (host_id, qid) do update set
+                    cloud_resource_id = %(cloud_resource_id)s, last_found_at = %(last_found_at)s, results = %(results)s,
+                    severity = %(severity)s, status = %(status)s, synced = true, type = %(type)s
             '''
             psycopg2.extras.execute_batch(cur, sql, records)
 
@@ -63,11 +63,12 @@ def main_job(repeat_interval_hours: int = None):
     url = f'https://{qualys_hostname}/api/2.0/fo/asset/host/vm/detection/'
 
     tag_set_include = os.getenv('QUALYS_TAG_SET_INCLUDE')
+    severity = os.getenv('QUALYS_DETECTION_SEVERITY')
     params = {
         'action': 'list',
         'filter_superseded_qids': 1,
         'host_metadata': 'all',
-        'severities': '5',
+        'severities': severity,
         'tag_set_include': tag_set_include,
         'truncation_limit': 500,
         'use_tags': '1',
