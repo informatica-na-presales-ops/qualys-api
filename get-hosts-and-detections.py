@@ -7,12 +7,7 @@ import requests.auth
 import signal
 import sys
 import time
-import typing
 import urllib.parse
-
-if typing.TYPE_CHECKING:
-    # noinspection PyProtectedMember
-    from psycopg2._psycopg import connection as psycopg2_connection
 
 log = notch.make_log('qualys_api.get_hosts_and_detections')
 
@@ -25,7 +20,7 @@ def human_duration(duration: int) -> str:
     return f'{duration}s'
 
 
-def upsert_qualys_hosts(cnx: psycopg2_connection, records: list):
+def upsert_qualys_hosts(cnx, records: list):
     sql = '''
         insert into qualys_hosts (qualys_host_id, cloud_resource_id, synced)
         values (%(qualys_host_id)s, %(cloud_resource_id)s, true)
@@ -36,7 +31,7 @@ def upsert_qualys_hosts(cnx: psycopg2_connection, records: list):
             psycopg2.extras.execute_batch(cur, sql, records)
 
 
-def upsert_qualys_host_detections(cnx: psycopg2_connection, records: list):
+def upsert_qualys_host_detections(cnx, records: list):
     with cnx:
         with cnx.cursor() as cur:
             sql = '''
@@ -62,7 +57,7 @@ def call(session: requests.Session, url: str, params: dict) -> requests.Response
     return response
 
 
-def get_hosts(session: requests.Session, url: str, cnx: psycopg2_connection):
+def get_hosts(session: requests.Session, url: str, cnx):
     function_start = time.monotonic()
 
     log.info('Getting host list')
@@ -119,7 +114,7 @@ def get_hosts(session: requests.Session, url: str, cnx: psycopg2_connection):
     log.info(f'Getting host list completed in {human_duration(function_duration)}')
 
 
-def get_detections(session: requests.Session, url: str, cnx: psycopg2_connection):
+def get_detections(session: requests.Session, url: str, cnx):
     function_start = time.monotonic()
 
     log.info('Getting detection list')
