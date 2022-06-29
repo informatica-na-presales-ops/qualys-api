@@ -7,9 +7,14 @@ import requests.auth
 import signal
 import sys
 import time
+import typing
 import urllib.parse
 
-log = notch.make_log('qualys_api.get_host_details')
+if typing.TYPE_CHECKING:
+    # noinspection PyProtectedMember
+    from psycopg2._psycopg import connection as psycopg2_connection
+
+log = notch.make_log('qualys_api.get_hosts_and_detections')
 
 
 def human_duration(duration: int) -> str:
@@ -20,7 +25,7 @@ def human_duration(duration: int) -> str:
     return f'{duration}s'
 
 
-def upsert_qualys_hosts(cnx, records: list):
+def upsert_qualys_hosts(cnx: psycopg2_connection, records: list):
     sql = '''
         insert into qualys_hosts (qualys_host_id, cloud_resource_id, synced)
         values (%(qualys_host_id)s, %(cloud_resource_id)s, true)
@@ -31,7 +36,7 @@ def upsert_qualys_hosts(cnx, records: list):
             psycopg2.extras.execute_batch(cur, sql, records)
 
 
-def upsert_qualys_host_detections(cnx, records: list):
+def upsert_qualys_host_detections(cnx: psycopg2_connection, records: list):
     with cnx:
         with cnx.cursor() as cur:
             sql = '''
@@ -48,83 +53,54 @@ def upsert_qualys_host_detections(cnx, records: list):
             psycopg2.extras.execute_batch(cur, sql, records)
 
 
-def main_job(repeat_interval_hours: int = None):
-    main_job_start = time.monotonic()
-    log.info('Running the main job')
+def call(session: requests.Session, url: str, params: dict) -> requests.Response:
+    call_start = time.monotonic()
+    response = session.get(url, params=params)
+    response.raise_for_status()
+    call_duration = int(time.monotonic() - call_start)
+    log.info(f'Call completed in {human_duration(call_duration)}')
+    return response
 
-    qualys_hostname = os.getenv('QUALYS_HOSTNAME')
-    qualys_password = os.getenv('QUALYS_PASSWORD')
-    qualys_username = os.getenv('QUALYS_USERNAME')
 
-    s = requests.session()
-    s.auth = requests.auth.HTTPBasicAuth(qualys_username, qualys_password)
-    s.headers.update({'X-Requested-With': 'Python'})
+def get_hosts(session: requests.Session, url: str, cnx: psycopg2_connection):
+    function_start = time.monotonic()
 
-    url = f'https://{qualys_hostname}/api/2.0/fo/asset/host/vm/detection/'
+    log.info('Getting host list')
 
-    tag_set_include = int(os.getenv('QUALYS_TAG_SET_INCLUDE'))
-    severity = int(os.getenv('QUALYS_DETECTION_SEVERITY', 5))
-    params = {
-        'action': 'list',
-        'filter_superseded_qids': 1,
-        'host_metadata': 'all',
-        'severities': severity,
-        'tag_set_include': tag_set_include,
-        'truncation_limit': 500,
-        'use_tags': '1',
-    }
-
-    cnx = psycopg2.connect(os.getenv('DB'))
     with cnx:
         with cnx.cursor() as cur:
             cur.execute('update qualys_hosts set synced = false where synced is true')
-            cur.execute('update qualys_host_detections set synced = false where synced is true')
+
+    params = {
+        'action': 'list',
+        'host_metadata': 'all',
+        'tag_set_include': os.getenv('QUALYS_TAG_SET_INCLUDE'),
+        'truncation_limit': 500,
+        'use_tags': 1,
+    }
 
     call_count = 0
     while True:
         call_count += 1
         log.info(f'{call_count} Calling {url}?{urllib.parse.urlencode(params)}')
-
-        call_start = time.monotonic()
-        response = s.get(url, params=params)
-        response.raise_for_status()
-        call_duration = int(time.monotonic() - call_start)
-        log.info(f'Call took {human_duration(call_duration)}')
+        response = call(session, url, params)
 
         root = lxml.objectify.fromstring(response.content)
-
-        host_records = []
-        detection_records = []
+        records = []
         for host in root.RESPONSE.HOST_LIST.HOST:
             qualys_host_id = int(host.ID)
             if hasattr(host, 'CLOUD_RESOURCE_ID'):
                 log.debug(f'Qualys host id: {qualys_host_id} / Cloud resource id: {host.CLOUD_RESOURCE_ID}')
-                host_records.append({
+                records.append({
+                    'cloud_resource_id': str(host.CLOUD_RESOURCE_ID),
                     'qualys_host_id': qualys_host_id,
-                    'cloud_resource_id': str(host.CLOUD_RESOURCE_ID)
                 })
-                for detection in host.DETECTION_LIST.DETECTION:
-                    qid = int(detection.QID)
-                    detection_records.append({
-                        'cloud_resource_id': str(host.CLOUD_RESOURCE_ID),
-                        'host_id': qualys_host_id,
-                        'last_found_at': str(detection.LAST_FOUND_DATETIME),
-                        'qid': qid,
-                        'results': str(detection.RESULTS),
-                        'severity': int(detection.SEVERITY),
-                        'status': str(detection.STATUS),
-                        'type': str(detection.TYPE),
-                    })
             else:
                 log.info(f'Qualys host {qualys_host_id} does not have a cloud resource id')
 
-        if host_records:
-            log.info(f'Pushing {len(host_records)} host records to database')
-            upsert_qualys_hosts(cnx, host_records)
-
-        if detection_records:
-            log.info(f'Pushing {len(detection_records)} detection records to database')
-            upsert_qualys_host_detections(cnx, detection_records)
+        if records:
+            log.info(f'Pushing {len(records)} host records to database')
+            upsert_qualys_hosts(cnx, records)
 
         if hasattr(root.RESPONSE, 'WARNING'):
             log.info(f'Found a warning: {root.RESPONSE.WARNING.CODE}')
@@ -138,7 +114,96 @@ def main_job(repeat_interval_hours: int = None):
     with cnx:
         with cnx.cursor() as cur:
             cur.execute('delete from qualys_hosts where synced is false')
+
+    function_duration = int(time.monotonic() - function_start)
+    log.info(f'Getting host list completed in {human_duration(function_duration)}')
+
+
+def get_detections(session: requests.Session, url: str, cnx: psycopg2_connection):
+    function_start = time.monotonic()
+
+    log.info('Getting detection list')
+
+    with cnx:
+        with cnx.cursor() as cur:
+            cur.execute('update qualys_host_detections set synced = false where synced is true')
+
+    params = {
+        'action': 'list',
+        'host_metadata': 'all',
+        'qids': os.getenv('QUALYS_QIDS'),
+        'tag_set_include': os.getenv('QUALYS_TAG_SET_INCLUDE'),
+        'truncation_limit': 500,
+        'use_tags': 1,
+    }
+
+    call_count = 0
+    while True:
+        call_count += 1
+        log.info(f'{call_count} Calling {url}?{urllib.parse.urlencode(params)}')
+        response = call(session, url, params)
+
+        root = lxml.objectify.fromstring(response.content)
+        records = []
+        for host in root.RESPONSE.HOST_LIST.HOST:
+            qualys_host_id = int(host.ID)
+            if hasattr(host, 'CLOUD_RESOURCE_ID'):
+                log.debug(f'Qualys host id: {qualys_host_id} / Cloud resource id: {host.CLOUD_RESOURCE_ID}')
+                for detection in host.DETECTION_LIST.DETECTION:
+                    qid = int(detection.QID)
+                    records.append({
+                        'cloud_resource_id': str(host.CLOUD_RESOURCE_ID),
+                        'host_id': qualys_host_id,
+                        'last_found_at': str(detection.LAST_FOUND_DATETIME),
+                        'qid': qid,
+                        'results': str(detection.RESULTS),
+                        'severity': int(detection.SEVERITY),
+                        'status': str(detection.STATUS),
+                        'type': str(detection.TYPE),
+                    })
+            else:
+                log.info(f'Qualys host {qualys_host_id} does not have a cloud resource id')
+
+        if records:
+            log.info(f'Pushing {len(records)} detection records to database')
+            upsert_qualys_host_detections(cnx, records)
+
+        if hasattr(root.RESPONSE, 'WARNING'):
+            log.info(f'Found a warning: {root.RESPONSE.WARNING.CODE}')
+            if root.RESPONSE.WARNING.CODE == 1980:
+                p = urllib.parse.urlparse(str(root.RESPONSE.WARNING.URL))
+                params = dict(urllib.parse.parse_qsl(p.query))
+                continue
+
+        break
+
+    with cnx:
+        with cnx.cursor() as cur:
             cur.execute('delete from qualys_host_detections where synced is false')
+
+    function_duration = int(time.monotonic() - function_start)
+    log.info(f'Getting detection list completed in {human_duration(function_duration)}')
+
+
+def main_job(repeat_interval_hours: int = None):
+    main_job_start = time.monotonic()
+    log.info('Running the main job')
+
+    cnx = psycopg2.connect(os.getenv('DB'))
+
+    qualys_hostname = os.getenv('QUALYS_HOSTNAME')
+    qualys_password = os.getenv('QUALYS_PASSWORD')
+    qualys_username = os.getenv('QUALYS_USERNAME')
+
+    s = requests.session()
+    s.auth = requests.auth.HTTPBasicAuth(qualys_username, qualys_password)
+    s.headers.update({'X-Requested-With': 'Python'})
+
+    url = f'https://{qualys_hostname}/api/2.0/fo/asset/host/'
+    get_hosts(s, url, cnx)
+
+    url = f'https://{qualys_hostname}/api/2.0/fo/asset/host/vm/detection/'
+    get_detections(s, url, cnx)
 
     cnx.close()
 
