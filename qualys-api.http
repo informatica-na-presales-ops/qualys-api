@@ -6,12 +6,19 @@ X-Requested-With: Unknown
 
 ###
 
-GET {{api_url}}api/2.0/fo/asset/host/vm/detection/?action=list&ids={{host_id}}&filter_superseded_qids=1&severities=4-5
+GET {{api_url}}api/2.0/fo/asset/host/vm/detection/?action=list&truncation_limit=1&host_metadata=all&use_tags=1&tag_set_include={{tag_id}}&filter_superseded_qids=1&severities=4-5
 Authorization: Basic {{qualys_username}} {{qualys_password}}
 X-Requested-With: Unknown
 
 ###
 
-GET {{api_url}}api/2.0/fo/knowledge_base/vuln/?action=list&last_modified_after=2021-12-11
+GET {{api_url}}api/2.0/fo/asset/host/vm/detection/?action=list&truncation_limit=1&host_metadata=all&use_tags=1&tag_set_include={{tag_id}}&qids={{qid}}
+#&severities=4-5&truncation_limit=1&filter_superseded_qids=1
+Authorization: Basic {{qualys_username}} {{qualys_password}}
+X-Requested-With: Unknown
+
+###
+
+GET {{api_url}}api/2.0/fo/knowledge_base/vuln/?action=list&ids={{qid}}
 Authorization: Basic {{qualys_username}} {{qualys_password}}
 X-Requested-With: Unknown
